@@ -1,0 +1,292 @@
+import os, sys
+import os.path
+import re
+import json
+import time
+import datetime
+# TODO; add traaces if necessary
+# Added value save/restore methods to add traceability usage 160725
+from collections import deque  # https://docs.python.org/3.1/tutorial/datastructures.html
+from ParamUtils import *
+from TrickUtils import *
+from TextItemUtils import *
+
+
+
+class clState(clTextItems):  # Parent class changed for more services
+	#=========================================================
+	def __init__(me, sDuty, oTrace, sTheseDriveLetter="N/A", sCreatorPath="N/A", sCreatorName="N/A"):  # python constructor
+	#=========================================================
+		me.sEvent 			= "N/A"
+		me.oTrace 			= oTrace
+		me.sDuty 			= sDuty
+
+		me.oTrace.INFO("constructor for '"+ sDuty+"'")
+		clParams.__init__(me, sDuty, oTrace)
+
+		# TBD: add array for saved values for multiple RValues of single LValue
+		me.dValuesWithinState 			= {}   # every key has single scalar value
+		me.dOaValuesWithinState			= {}   # every key has 1...N values
+		
+		me.asStatesHistory 	= ["UNKNOWN","UNKNOWN"]
+		
+	#=====================
+	def setState(me, sNewState, sEvent="just setting"):
+	#=====================
+		#if sNewState != me.asStatesHistory[nPOS_LATEST]:
+		#me.oTrace.INFO("STATE "+me.asStatesHistory[p_nPOS_LATEST]+" changed to "+sNewState+" by EVENT '"+sEvent+"' at '"+me.sDuty+"'")
+		me.asStatesHistory.append(sNewState)
+
+		sNewState = me.asStatesHistory[p_nPOS_LATEST]
+		sNowState = me.asStatesHistory[p_nPOS_PREV]
+
+		if sNewState != sNowState:
+			me.oTrace.INFO("STATE '" + sNowState + "' has changed to '" + sNewState + "' by EVENT '"+sEvent+"' in '" + me.sDuty + "'")
+		#me.oTrace.INFO("<now state> = '" + sNowState + "' <new state> = '" + sNewState + "' at '" + me.sDuty + "'")
+	
+		
+	#=====================
+	def setStateIfNot(me, sNewState, sEvent="just setting"):
+	#=====================
+		if sNewState != me.asStatesHistory[p_nPOS_LATEST]:
+			me.asStatesHistory.append(sNewState)
+			me.clearAllStateVal()
+
+	#=====================
+	def getState(me):
+	#=====================
+		return me.asStatesHistory[p_nPOS_LATEST]  #  !: Python: Array indexing: newest append
+	#=====================
+	def getPrevState(me):
+	#=====================
+		return me.asStatesHistory[p_nPOS_PREV]  #  !: Python: Array indexing: second newest append
+	#=====================
+	def isState(me, sAskState):
+	#=====================
+		if me.asStatesHistory[p_nPOS_LATEST] == sAskState: #  !: Python: Array indexing: newest append
+			return True
+		else:
+			return False
+	#=====================
+	def isStateNot(me, sAskState):
+	#=====================
+		if me.asStatesHistory[p_nPOS_LATEST] == sAskState:
+			return False
+		else:
+			return True
+	#=====================
+	def isPrevState(me, sAskState):
+	#=====================
+		if me.asStatesHistory[p_nPOS_PREV] == sAskState:
+			return True
+		else:
+			return False
+	#=====================
+	def isPrevStateNot(me, sAskState):
+	#=====================
+		if me.asStatesHistory[p_nPOS_PREV] == sAskState:
+			return False
+		else:
+			return True
+	#=====================
+	def isStateChanged(me):
+	#=====================
+		sNewState = me.asStatesHistory[p_nPOS_LATEST]
+		sNowState = me.asStatesHistory[p_nPOS_PREV]
+
+		if sNewState == sNowState:
+			me.oTrace.INFO("STATE '" + sNowState + "' is not changed at '" + me.sDuty + "'")
+			return False
+		else:
+			me.oTrace.INFO("STATE '" + sNowState + "' has been changed to '" + sNewState + "' at '" + me.sDuty + "'")
+			return True
+
+	#=====================
+	def isStateNotChanged(me):
+	#=====================
+		sNewState = me.asStatesHistory[p_nPOS_LATEST]
+		sNowState = me.asStatesHistory[p_nPOS_PREV]
+
+		if sNewState == sNowState:
+			me.oTrace.INFO("STATE '" + sNowState + "' is not changed at '" + me.sDuty + "'")
+			return True
+		else:
+			me.oTrace.INFO("STATE '" + sNowState + "' has been changed to '" + sNewState + "' at '" + me.sDuty + "'")
+			
+			return False
+		
+	#=====================
+	def hasBeenInState(me, sState):
+	#=====================
+		for sEarlierState in me.asStatesHistory:
+			if sState == sEarlierState:
+				return True
+		return False
+	
+	#=====================
+	def hasNotBeenInState(me, sState):
+	#=====================
+		for sEarlierState in me.asStatesHistory:
+			if sState == sEarlierState:
+				return False
+		return True
+	
+	#=====================
+	def wasEvent(me, sEventMatchRegex):  # the "event" text can contain several words. so regex match is used to pick type "type" of event
+	#=====================
+		reEvent = re.compile(sEventMatchRegex)
+		m = reEvent.match(me.sEvent)
+		if m:
+			return True
+		else:
+			return False
+		
+
+####################################################
+class clFlags(clTextItems):
+
+	#=========================================================
+	def __init__(me, sDuty, oTrace, sTheseDriveLetter="N/A", sCreatorPath="N/A", sCreatorName="N/A"):  # python constructor
+	#=========================================================
+		me.sEvent 			= "N/A"
+		me.oTrace 			= oTrace
+		me.sDuty 			= sDuty
+		me.oTrace.INFO("constructor for '" + me.sDuty+"'")
+		clParams.__init__(me, sDuty, oTrace)
+		me.dFlags = {}  # values are True OR False
+	
+	#=====================
+	def clear(me, sKey, bVal):
+	#=====================
+		me.dFlags = {}
+		me.oTrace.INFO("clear all in '" + me.sDuty+"'")
+
+	#=====================
+	def set(me, sKey, bVal):
+	#=====================
+		me.dFlags[sKey] = bVal
+		me.oTrace.INFO("'"+sKey+"' changed to '"+str(bVal)+ "' within '" + me.sDuty+"'")
+
+	#=====================
+	def get(me, sKey):
+	#=====================
+		bNamedFlag=me.dFlags.get(sKey, False)
+		me.oTrace.INFO("'"+sKey+"' returned '"+str(bVal)+ "' within '" + me.sDuty+"'")
+		return bNamedFlag
+	
+	#=====================
+	def equals(me, sKey, bVal):
+	#=====================
+		bNamedFlag = me.dFlags.get(sKey, False)
+		if bVal == bNamedFlag:
+			return True
+		else:
+			return False
+			
+		
+#========================================================================================
+
+class clValues(clTextItems):
+	#=========================================================
+	def __init__(me, sDuty, oTrace, sTheseDriveLetter="N/A", sCreatorPath="N/A", sCreatorName="N/A"):  # python constructor
+	#=========================================================
+		me.sEvent = "N/A"
+		me.oTrace = oTrace
+		me.sDuty = sDuty
+		me.oTrace.INFO("constructor for '" + sDuty + "'")
+		me.dValues = {}
+		me.dOaValues= {}  # every key has 1...N values
+
+		clParams.__init__(me, sDuty, oTrace)
+		me.dFlags = {}  # values are True OR False
+	
+	# =====================
+	def pushBy(me, sHashKey, sHashAppendVal):
+	# =====================
+		# https: // www.kumari.net / index.php / programming / programmingcat / 22 - python - making - a - dictionary - of - lists - a - hash - of - arrays
+		# TBD: use <deque> object here
+		# me.dOaValuesWithinState[sHashKey].append(sHashAppendVal)
+		
+		me.dOaValues.setdefault(sHashKey, []).append(sHashAppendVal)
+		me.oTrace.INFO("KEY='" + sHashKey + "' , VAL='" + sHashAppendVal + "'")
+	
+	# =====================
+	def popOldestBy(me, sHashKey):
+		# =====================
+		sRetVal = ""
+		# https://www.programiz.com/python-programming/methods/list/pop
+		try:
+			sRetVal = me.dOaValues[sHashKey].pop(0)
+		except:
+			sRetVal = ""
+		me.oTrace.INFO("KEY='" + sHashKey + "' , VAL='" + sRetVal + "'")
+		return sRetVal
+	
+	# TBD: add retrieval method
+	# =====================
+	def save(me, sHashKey, sHashNewVal, sReason="just setting"):
+	# =====================
+		bDoTrace = True  # initial quess: key exists
+		try:
+			sHashCurrentVal = me.dValues[sHashKey]
+		except KeyError:
+			bDoTrace = False
+		
+		if bDoTrace == True:
+			if sHashNewVal == sHashCurrentVal:
+				a = 123
+			else:
+				a = 123
+		me.oTrace.INFO(
+			"KEY '" + sHashKey + "' VALUE set to '" + sHashNewVal + "' by REASON '" + sReason + "' at '" + me.sDuty + "'")
+		me.dValues[sHashKey] = sHashNewVal
+	
+	# =====================
+	def equals(me, sHashKey, sCheckVal):
+	# =====================
+		sHashVal = me.dValues.get(sHashKey, "MISSING")
+		if sHashVal == sCheckVal:  # !: Python string comparison
+			return True
+		else:
+			return False
+	
+	# =====================
+	def restore(me, sHashKey):
+	# =====================
+		sHashVal = me.dValues.get(sHashKey, "MISSING")
+		me.oTrace.INFO("KEY '" + sHashKey + "' returned VALUE  '" + sHashVal + "' at '" + me.sDuty + "'")
+		return sHashVal
+	
+	#=====================
+	def getDict(me):
+	#=====================
+		dDict = me.dValues
+		sDict = anyDictToStr(dDict)
+		me. oTrace.INFO("Dictionary by '"+me.sDuty+"' = " + sDict)
+		return dDict
+	
+	# =====================
+	def searchInSavedValues(me, sSearchKey):
+	# =====================
+		pass
+	
+	# TBD: 170814
+	
+	
+	# =====================
+	def clearAll(me):
+		# =====================
+		me.dValuese = {}  # for clearing values when state changes
+		me.dOaValues= {}
+	
+	#===============================================================================
+	def combineScalarDicts(me, oOtherValuesObject):
+	#===============================================================================
+		# can be usen to combine "local" values with "global" values
+		dResult = me.dValue  # "SETUP" phase dictionary
+		dResult.update(oOtherValuesObject.getDict())
+		return dResult
+	
+	
+	
+	

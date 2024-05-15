@@ -1,0 +1,397 @@
+#
+# all "line capture regex" and "fill template line" functions shall be reside here
+#	-	can be called from any object, not just from "ReportUtils"
+
+import os, sys
+import os.path
+import re
+import json
+import time
+#import datetime
+from datetime import datetime
+import subprocess
+
+NOTETAB_OUTLINE_FILE_HEADING = "= V4 Outline MultiLine NoSorting TabWidth=30"
+
+sOtlTopicNameTpl = "H=\"__topic_name__\""
+
+sSYMBOLIFIER_POSTFIX = "sym"
+sLABELIFIER_POSTFIX  = "lbl"
+sSEQ_NBR_TAG 		 = "SEQ"
+
+#=============================================	
+def doesFileExist(sAbsOrRelFileName):   # function is copied here for easier access than in "FileManage" object
+#=============================================
+	bFileStatus = False  # initial quess
+	sFileName = sAbsOrRelFileName.strip()   # !: assures leading and trailing white characters absence
+	if os.path.isfile(sFileName):
+		bFileStatus = True
+	return bFileStatus
+
+#=============================================	
+def isReasonableFileName(sAbsOrRelFileName,oTrace):   # for output file names
+#=============================================
+	bFileStatus = False  # initial quess
+	sFileName = sAbsOrRelFileName.strip()   # !: assures leading and trailing white characters absence
+	if sFileName != "" and sFileName != "MISSING":
+		bFileStatus = True
+	else:
+		oTrace.INFO("string "+sFileName+" is not reasonable file name")
+		
+	return bFileStatus	
+	
+#=============================================	
+def removePossiblePairChars(sText):
+#=============================================
+	sText = sText.replace("(", "")
+	sText = sText.replace(")", "")
+	sText = sText.replace("[", "")
+	sText = sText.replace("]", "")
+	sText = sText.replace("{", "")
+	sText = sText.replace("}", "")
+	return sText
+	
+	
+#=============================================	
+def findFirstInList(reMatchStr, asList):
+#=============================================
+	# TBD: change to handle regex
+	nItemNbr=-1  # initial quess: not found
+	for sStr in asList:
+		nItemNbr = nItemNbr + 1
+		if reMatchStr in sStr:
+			continue
+	return nItemNbr
+	
+	
+
+#=============================================	
+def tryTrapToPosSlots(sText, sRE, oTrace):		
+#=============================================
+	# this is the frontline "catcher"
+	# adds captured values to dictionary where key names are formed by position numbers
+	#	-	key values within this function are formed by order number "1", "2",...
+	# 	-	caller can then add "metadata" key/val -pairs (eg. sequence numbers) to returned dictionary
+	# 		-	can be used for filling templates which require also other than just captured data
+	#
+	
+	dTrapped={}
+	nGroupPos = 0
+	oRE = re.compile(sRE)
+	
+	
+	oMatch = oRE.match(sText)
+	tGroups=()
+
+	sRetStatus = "NOT_MATCH"   # initial quess
+
+	if oMatch:
+		tGroups = oMatch.groups() # !: Python: returns all captures in a tuple http://www.tutorialspoint.com/python/python_tuples.htm
+		oTrace.INFO("succeeded to  match '"+sRE+"' to '"+sText+"'")
+		if tGroups:	#!: Python way to check if something (here a tuple) is empty
+			for sGroup in tGroups:
+				nGroupPos += 1
+				sKey = str(nGroupPos)  # creates integer string key by captured group order number
+				dTrapped[sKey] = sGroup	
+				oTrace.INFO("dTrapped["+sKey+"] = "+sGroup)
+				
+			sRetStatus = "YES_CATCH"   
+		else:
+			oTrace.INFO("just match, no captures was requested")
+			sRetStatus = "YES_MATCH" 
+	else:
+		oTrace.INFO("failed to match '"+sRE+"' to '"+sText+"'")
+		a=123
+	sTrapped = seqDictValuesToStr(dTrapped,", ")
+	oTrace.INFO("tried to match '"+sRE+"' to '"+sText+"', status='"+sRetStatus+"', trapped contents='"+sTrapped+"'")
+		
+	return sRetStatus, dTrapped   
+
+#=============================================	
+def tryTrapAllSimilar(sText, sRE, oTrace):		# is a generic Matcher/Catcher
+#=============================================
+	# !: Python,regex,match,groups: http://www.tutorialspoint.com/python/python_reg_expressions.htm
+	# !: http://www.tutorialspoint.com/python/python_tuples.htm
+	# !: http://pythoncentral.io/how-to-check-if-a-list-tuple-or-dictionary-is-empty-in-python/
+
+	asRes = []
+	asCaptures 	= []
+	sRetStatus 	= "NOT_MATCH"   # initial quess
+	oTrace.INFO("try find all '"+sRE+"' in '"+sText+"'")
+	tRes 		= re.findall(sRE, sText)   # !: returns all matches: capturing parentheses have no effect
+	
+	asRes = list(tRes)  # !: tuple to list
+	
+	sRes 		= ", ".join(map(str,tRes))  # !: array to string
+	
+	if tRes:
+		for sItem in asRes:
+		#	oTrace.INFO("item = "+str(sItem))
+			abc=123
+		sCnt = str(len(tRes))
+		#oTrace.INFO("Match or Catch '"+sRE+"' succesful to '"+sText+"'")
+		#oTrace.INFO(sCnt+" captures (as single string): '"+sRes+"'")
+		
+		sRetStatus = "YES_MATCH"
+	else:  # !: array was empty
+		a=123
+		#oTrace.INFO("Match or Catch '"+sRE+"' failed to '"+sText+"'")
+		
+	oTrace.INFO("return status/captures = '" + sRetStatus+"'/'"+sRes+"'")
+
+	
+	return sRetStatus, tRes   # !: returns a tuple (=immutable array)
+				
+
+#=============================================	
+def createOtlTopicHeading(sName):   # transferred here because even TraceUtils may use this
+#=============================================
+	sTopicNameLine = sOtlTopicNameTpl.replace("__topic_name__", sName)   # TBD: better topic heading	
+	return sTopicNameLine
+
+#=============================================	
+def createOtlLink(sFileName, sTopicName):   # transferred here because even TraceUtils may use this
+#=============================================	
+	sOtlLinkToSidekickTopic = "["+sFileName+"::"+sTopicName+"]"
+	return sOtlLinkToSidekickTopic	
+				
+#=============================================	
+def getFileNameParts(sPossibleFileFullName):   # transferred here because even TraceUtils may use this
+#=============================================
+	sPathName = os.path.dirname(sPossibleFileFullName)
+	sFileName = os.path.basename(sPossibleFileFullName)
+	sFileExt = os.path.splitext(sPossibleFileFullName)[1]
+	sFileBody = sFileName.replace(sFileExt,"")
+	if sPathName != "" :
+		if not sPathName.endswith('"'):
+			sPathName += "/"    # "standardizes" path name ending to contain a slash
+			
+	return (sPathName, sFileName, sFileBody, sFileExt)	
+	
+#=============================================	
+def assureFileFullName(sPossibleFileName, sDefaultPathName):   # transferred here because even TraceUtils may use this
+#=============================================
+#   given file name is assumed to be either PLAIN or FULL
+#	-	TBD: add handling of relative and partial path names
+#   IF file name is not full THEN the path part is taken from the default path name
+	sFileFullNameRet = sPossibleFileName # initial quess
+	(sPathName, sFileName) = os.path.split(sPossibleFileName)
+	if sPathName == "":
+		sFileFullNameRet = sDefaultPathName+"/"+sFileName
+		
+		
+	print ("path/file = "+sPathName+"/"+sFileName+"\n")
+	print ("sidekick file full name  = "+sFileFullNameRet+"\n")
+	return sFileFullNameRet
+	
+#=============================================
+def lbl(sStr):
+#=============================================
+# converts or removes characters which are not valid within eg. Graphviz labels
+# -	  long single line is divided to multiple short lines ( to make a compact "label" eg. for Graphviz nodes/edges)
+# TBD: tester function
+	nPartMaxLen = 32  # TBD: configurable
+	sLbl = sStr.replace("\\","\\\\\\\\")
+	#TRACE("labellable string before modifications: '$sLbl'");
+	sLbl = sLbl.replace("\\\\\\\\","\\\\\\\\ ")
+	#TRACE("labellable string after possible backslashes added printable: '$sLbl'");
+
+	sLbl = sLbl.replace("\/","\/ ")
+	sLbl = sLbl.replace("_","_ ")
+	sLbl = sLbl.replace("\""," ")
+	# $sLbl =~ s/_/\_ /g;
+	
+	if sLbl == "":
+		sLbl = "EMPTY"
+		return sLbl
+	
+    #TRACE("labellable string after cutting spaces adding: '$sLbl'");
+
+	asParts = sLbl.split("\s+")
+	sResultStr = ""
+	nNextStepPos = nPartMaxLen
+	
+	for sPart in asParts:
+		sResultStr = sResultStr + " " +sPart
+		
+		nTotalLen = len(sResultStr)
+		if nTotalLen > nNextStepPos:
+			sResultStr = sResultStr+"\\\\n"
+			nTotalLen = len(sResultStr)
+			nNextStepPos = nTotalLen + nMaxPartLen
+
+
+    #TRACE("labelled string before removing cutting spaces '$ResultStr'");
+	
+	sResultStr = sResultStr.replace("\\\\ ", "\\\\") # to return non-splitted positions to original
+	sResultStr = sResultStr.replace("\\n ", "\\n")
+	sResultStr = sResultStr.replace("\/ ", "\/")
+
+	#TRACE("string '$s' labelled to '$ResultStr'");
+	#TRACE_RET();
+	return sResultStr
+
+#=============================================
+def sym(sStr):
+#=============================================
+# converts or removes characters which are not valid for symbol names within most programming languages (or Graphviz names)
+	sStr = re.sub('\W','_',sStr)    # !: Python: regex in substitution: use 're' -module, NOT 'replace()' -function !!!!!!
+	sStr = re.sub("^\d","_",sStr)   # leading numeric chars
+	if sStr == "":
+		sStr = "EMPTY"
+	return sStr
+	
+#=============================================
+def trimThrough(sStr):  # Removes leading and trailing spaces. Reduces multiple white chars
+#=============================================
+	sStr = re.sub("^\s+","",sStr)
+	sStr = re.sub("\s+$","",sStr)
+	sStr = re.sub("\s+"," ",sStr)
+	sStr = re.sub("\R"," ",sStr)
+	return sStr	
+#=============================================
+def timeStamp(sFormatStr="%Y-%m-%d %H:%M:%S"):  # Removes leading and trailing spaces. Reduces multiple white chars
+#=============================================	
+	#return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+	return datetime.now().strftime(sFormatStr)
+#=============================================	
+def isIntStr(s):
+#=============================================
+    try: 
+        int(s)
+        return True
+    except ValueError:
+        return False
+		
+#=============================================	
+def arrayToStr(axParts, sDelim="", sCommentPrefix=""):
+#=============================================
+	sRetStr = sCommentPrefix + axParts.pop(0)  # first element
+	# no leading or trailing delimiter inserted
+	for xPart in axParts:
+		sPart = str(xPart)
+		sRetStr = sRetStr + sDelim + sPart 
+	return sRetStr
+	
+#=============================================	
+def seqDictValuesToStr(dBySeqNbr, sDelim="", sCommentPrefix=""):
+#=============================================
+	# joins values from dictionary, where key  names are integer strings
+	sRetStr = sCommentPrefix 
+	for xKey, xVal in dBySeqNbr.items():
+		sVal = str(xVal)
+		sRetStr = sRetStr + sDelim + sVal
+	return sRetStr
+	
+#=============================================	
+def copyPosDictToLabelDict(dFeed, sDestKeys, oTrace):
+#=============================================
+# source dictionary: key names are based on position numbers 1...N 
+# result Dictionary: key names selected by order within trap labels
+	oTrace.INFO("...")
+	bStatus = False
+	dDest 				= {}
+	asDestKeys 			= sDestKeys.split()
+	nDestKeysCnt 		= len(asDestKeys)
+	nFeedDictValCnt 	= len(dFeed)
+	
+	if nDestKeysCnt != nFeedDictValCnt:
+		oTrace.INFO("mismatch: "+str(nFeedDictValCnt)+" feed values but "+str(nDestKeysCnt)+" destination keys")
+	else:
+		bStatus = True
+		nValCnt = nFeedDictValCnt
+		for nPos in range(0, nValCnt-1):  
+			sFeedKey = str(nPos+1)
+			sFeedVal = dFeed[sFeedKey]
+			sDestKey = asDestKeys[nPos]
+			sDestKey.replace("$","")  # TBD make more robust
+			sDestVal = sFeedVal
+			dDest[sDestKey] = sDestVal
+			oTrace.INFO("dDest["+sDestKey+"] = "+sDestVal)
+			
+	return bStatus, dDest
+#===============================================================================
+def  tryFillSingleTemplate (dValuesForTags, sTaggedTpl, sTplTagCatchRe, dOptRewordDef, oTrace):  
+#===============================================================================
+	# transferred here for more versatile access
+	#  - tag names "$1", "$2", "$3" ... refer to captures array positions [0], [1], [2]...
+	# uses rewording dictionary as parameter
+
+	dTplTagFramesInTpl = {}
+	bFillingSuccess = False # initial quess: filling fails 
+	oTrace.INFO("template, before anything: '"+sTaggedTpl+"'")
+	oTrace.INFO("dictionary from caller, values for tags: '"+str(dValuesForTags)+"'")
+	
+	# (sStatus, tCatchGroups) = tryMatchOrCatch(sLine, sCaptureRe, oTrace)
+	# if sStatus == "NOT_MATCH":
+		# return "EMPTY", False
+	
+	(sStatus, tTagsInTpl) = tryTrapAllSimilar(sTaggedTpl, sTplTagCatchRe, oTrace) # tags from fresh template
+	
+	if sStatus == "NOT_MATCH":
+		return "EMPTY", False
+
+	sFilledTpl = sTaggedTpl
+	for asTagItem in tTagsInTpl:  # when regex string contains indented parentheses (tag frame catch and tag catch), ToT has been returned
+		sTagFullFrame	= asTagItem[0]  # 	prefix + tag + (optional) modifier
+		sTagFullCore	= asTagItem[1]  # 	tag + (optional) modifier
+		oTrace.INFO("picking tag from template: full_frame/full_core/template = '"+sTagFullFrame+"'/'"+sTagFullCore+"'/'"+sTaggedTpl+"'")
+		dTplTagFramesInTpl[sTagFullCore] = sTagFullFrame  # building a dictionary: keys are used to get values from
+
+	for sTagFullCore in dTplTagFramesInTpl:  # !: Python: looping keys within dictionary
+		sModifier = ""  # initial quess
+		sTagFullFrame =  dValuesForTags.get(sTagFullCore,"MISSING")
+		oTrace.INFO("tag core '"+sTagFullCore+"' returned tag frame '"+sTagFullFrame+"'")
+		try:   # !: for handling missing "."
+			sTagPlainCore, sModifier  = sTagFullCore.split(".")  # picks "lbl", "sym" etc.
+		except ValueError:   # no postfix found
+			sTagPlainCore = sTagFullCore
+		
+		sTrappedVal = dValuesForTags.get(sTagPlainCore,"MISSING")
+		
+		# if dOptionalRewords:
+		if dOptRewordDef != 0: 
+			sRewordedVal = dOptRewordDef.get(sTrappedVal,"MISSING") 
+			me.oTrace.INFO("trapped val '"+ sTrappedVal +"' is reword to '" +sRewordedVal+"'")
+			if sRewordedVal != "MISSING":
+				sTagReplaceRawVal = sRewordedVal
+			else:
+				sTagReplaceRawVal = sTrappedVal
+			me.oTrace.INFO("tag val to be used in template: '"+sTagReplaceRawVal+"'")
+		else: # reword object is not assigned
+			sTagReplaceRawVal = sTrappedVal
+		
+		#sTagReplaceRawVal = sDictVal
+		oTrace.INFO("raw_tag/tag_frame/modifier= '"+sTagFullCore+"'/'"+sTagFullFrame+"'/'"+sModifier+"'")
+		
+		if sModifier == sSYMBOLIFIER_POSTFIX:
+			sTagReplaceVal = sym(sTagReplaceRawVal)
+			#me.oTrace.INFO("symbolified '"+sTagReplaceRawVal+"' to '"+sTagReplaceVal+"'")
+		elif sModifier == sLABELIFIER_POSTFIX:
+			sTagReplaceVal = lbl(sTagReplaceRawVal)
+			# TBD: add handling of (reserved word) directive tags (eg. %SEQ% for edge sequence numbers and %INC% for node uniquelizer postfixes)
+		elif sModifier == "inc":
+			sTagReplaceVal = me.inc(sTag)
+			oTrace.INFO("value in '"+sTag+"' incremented, is now '"+sTagReplaceVal+"'")
+		elif sModifier == "epoch":
+			# TBD: add call to conversion of epoch time to human time
+			abc = 123
+		else:
+			sTagReplaceVal = sTagReplaceRawVal
+		#oTrace.INFO("tag val to be inserted in template: '"+sTagReplaceRawVal+"'")
+		#me.oTrace.INFO("retrieving: tag/tag frame/catch val = "+sTag+"/" +sTagFrame+"/" + sCatchVal)
+		oTrace.INFO("replaces "+sTagFullFrame+" with '"+ sTagReplaceVal+ "' in template '"+sFilledTpl+"'")				
+		sFilledTpl = sFilledTpl.replace(sTagFullFrame, sTagReplaceVal)
+		#oTrace.INFO("template: after replacement '"+sFilledTpl+"'")
+
+		
+	oTrace.INFO("template, before checking: '"+sFilledTpl+"'")
+	if "MISSING" not in sFilledTpl:
+		(sStatus, tPossiblyMissingKeys) = tryTrapAllSimilar(sFilledTpl, sTplTagCatchRe, oTrace)  # search for possible leftover tags
+		# returns "NOT_MATCH" or "YES_MATCH"
+		if sStatus == "NOT_MATCH":
+			 bFillingSuccess = True
+
+	oTrace.INFO("template, finally filled: '"+sFilledTpl+"'")
+	
+	return bFillingSuccess, sFilledTpl
