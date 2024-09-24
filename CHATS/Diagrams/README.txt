@@ -1,1 +1,1 @@
-All these files are created automatically by ChatGPT
+These files are created by asking ChatGPT to create a PlantUML syntax diagram of given topic.

@@ -1,0 +1,7 @@
+# keys are 'regexes', values are 'roles'
+# !: JSON hash: only one pair of '{}'
+{"^.*(file:)\\S+$":"FILE_NAME",
+".*(file)\\s*$": "FILE_DUTY_NODE",
+"(.*state\\s+).*": "STATE_NODE",
+".*(event:).*": "EVENT_DUTY_NODE",
+".*(database).*": "DATABASE_DUTY_NODE"}

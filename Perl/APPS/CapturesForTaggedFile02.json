@@ -1,0 +1,42 @@
+# version with 'array of hashes'
+#  --> this priority order is deterministic  (not so in 'hash of hashes')
+# This file is intended to be used by functions in 'GraphvizUtils.pm"
+#	---> THESE comment lines are automatically removed to produce valid JSON structure
+# the hash key names here must be equal to those in 'GraphvizUtils.pm'
+# TODO: change to 'SERVICE', 'Bond' and 'Activity' 160421
+[{"aCaptureRegex":"^.*file:\\s*(\\S+).*$",
+		"aNodeType":"FILE_NAME",
+		"aContextClusterLabel":"%1%"},
+{"aCaptureRegex":"^(.*)\\s+(\\S+).*file.*",
+		"aNodeType":"FILE_SERVICE_NODE",
+		"aNodeLabel":"file %2%",
+		"aLinkActionNodeLabel":"%1%",
+		"aEntryEdgeAttributes":"none",
+		"aNodeAttributes":", shape=parallelogram, style=filled,fillcolor=green"},
+{"aCaptureRegex":"^.*state\\s+(\\w+).*",
+		"aNodeType":"STATE_NODE", 
+		"aNodeLabel":"%1%",
+		"aNodeAttributes":", shape=box, style=filled, fillcolor=green"},
+{"aCaptureRegex":"\\s*event:\\s*(\\S+).*", 
+		"aNodeType":"EVENT_SERVICE_NODE",
+		"aNodeLabel": "event %1%",
+		"aLinkActionNodeLabel": "detect",
+		"aEntryEdgeAttributes":"none",
+		"aNodeAttributes":", shape=circle, style=filled, fillcolor=red"},
+{"aCaptureRegex":"^\\s*(\\S+).*(database.*)$",
+		"aNodeType": "DATABASE_SERVICE_NODE",
+		"aNodeLabel":"%2%",
+		"aLinkActionNodeLabel":"%1%",
+		"aEntryEdgeAttributes":"none",
+		"aNodeAttributes":",shape=parallelogram"}, 
+{"aCaptureRegex":"^\\s*XYZ*$",
+		"aNodeType": "IGNORE_NODE"},
+{"aCaptureRegex":"^\\s*(.*).*$",
+		"aNodeType": "ACTION_NODE",
+		"aNodeLabel":"%1%", 
+		"aEntryEdgeAttributes":"none",
+		"aNodeAttributes":", shape=ellipse, style=filled, fillcolor=yellow"}
+# no ',' to end of last hash !!!
+]
+
+	

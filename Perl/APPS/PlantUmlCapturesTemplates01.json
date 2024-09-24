@@ -1,0 +1,16 @@
+ version with 'array of hashes'
+#  --> this priority order is deterministic  (not so in 'hash of hashes')
+# This file is intended to be used by functions in 'PlantUmlUtils.pm"
+#	---> THESE comment lines are automatically removed to produce valid JSON structure
+# the hash key names here must be equal to those in 'PlantUmlUtils.pm'
+ 
+
+{"aCatch":"^(.*)\\s+(\\S+).*file.*",
+		"aSeqObjType":"actor",
+		"aSeqObjName":"file %2%",
+		"aAutoActionNodeLabel":"%1%",
+		"aEntryEdgeAttributes":"none",
+		"aSeqObjAttributes":", shape=parallelogram, style=filled,fillcolor=green"}
+
+# no ',' to end of last hash !!!
+]
